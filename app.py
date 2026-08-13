@@ -53,6 +53,31 @@ def salvar_caixa(nome, w, h, d, peso_max):
         "w": w, "h": h, "d": d, "peso_max": peso_max
     })
 
+st.divider()
+st.subheader("📁 Cadastro em Massa via Planilha")
+st.info("A planilha deve ter as colunas exatas: NOME, W, H, D, PESO_MAX")
+
+arquivo_excel = st.file_uploader("Arraste sua planilha (.xlsx) aqui", type=["xlsx"])
+
+if arquivo_excel is not None:
+    # O Pandas lê a planilha transformada em tabela
+    df = pd.read_excel(arquivo_excel)
+    st.dataframe(df) # Mostra uma prévia na tela
+    
+    if st.button("☁️ Salvar tudo no Firebase"):
+        with st.spinner("Salvando caixas no banco de dados..."):
+            for index, linha in df.iterrows():
+                # Envia cada linha direto para o Firebase, ignorando a IA
+                salvar_caixa(
+                    str(linha['NOME']), 
+                    float(linha['W']), 
+                    float(linha['H']), 
+                    float(linha['D']), 
+                    float(linha['PESO_MAX'])
+                )
+            st.success("✅ Todas as caixas foram cadastradas instantaneamente!")
+            st.rerun()
+
 # ==========================================
 # 2. FUNÇÃO DA INTELIGÊNCIA ARTIFICIAL
 # ==========================================
@@ -144,6 +169,34 @@ with col2:
         st.json(produtos_atuais)
 
 st.divider()
+
+# ==========================================
+# ÁREA ADMINISTRATIVA (MENU LATERAL)
+# ==========================================
+with st.sidebar:
+    st.header("⚙️ Administração")
+    st.divider()
+    st.subheader("📁 Cadastro em Massa (Caixas)")
+    st.info("Colunas obrigatórias na planilha: NOME, W, H, D, PESO_MAX")
+
+    arquivo_excel = st.file_uploader("Envie sua planilha (.xlsx)", type=["xlsx"])
+
+    if arquivo_excel is not None:
+        # Lê a planilha
+        df = pd.read_excel(arquivo_excel)
+        st.dataframe(df, use_container_width=True) # Mostra miniatura da tabela
+        
+        if st.button("☁️ Salvar no Firebase", use_container_width=True):
+            with st.spinner("Gravando no banco de dados..."):
+                for index, linha in df.iterrows():
+                    salvar_caixa(
+                        str(linha['NOME']), 
+                        float(linha['W']), 
+                        float(linha['H']), 
+                        float(linha['D']), 
+                        float(linha['PESO_MAX'])
+                    )
+                st.success("✅ Caixas cadastradas com sucesso!")
 
 mensagem_usuario = st.chat_input("Fale com a IA (Ex: Cadastre uma caixa G de 50x40x50 pesando max 10000g)")
 
