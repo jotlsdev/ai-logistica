@@ -2,3 +2,5 @@ streamlit
 py3dbp
 google-generativeai
 firebase-admin
+pandas
+openpyxl
