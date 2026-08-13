@@ -4,14 +4,14 @@ import google.generativeai as genai
 import json
 import re
 import firebase_admin
-import pandas as pd
 from firebase_admin import credentials, firestore
+import pandas as pd
 
 # ==========================================
 # 1. CONFIGURAÇÃO E BANCO DE DADOS (FIREBASE)
 # ==========================================
-st.set_page_config(page_title="Logística AI na Nuvem", page_icon="☁️")
-st.title("☁️ IA para Empacotamento (Firebase)")
+st.set_page_config(page_title="Logística AI na Nuvem", page_icon="☁️", layout="wide")
+st.title("☁️ IA para Empacotamento")
 
 # Puxando a chave do Gemini do cofre da nuvem
 API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -24,7 +24,7 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# --- Novas Funções para Ler e Salvar no Firebase ---
+# --- Funções para Ler e Salvar no Firebase ---
 
 def obter_produtos():
     produtos_ref = db.collection('produtos').stream()
@@ -43,7 +43,6 @@ def obter_caixas():
     return caixas
 
 def salvar_produto(nome, w, h, d, peso):
-    # O Firestore cria a coleção 'produtos' e o documento automaticamente
     db.collection('produtos').document(nome).set({
         "w": w, "h": h, "d": d, "peso": peso
     })
@@ -52,31 +51,6 @@ def salvar_caixa(nome, w, h, d, peso_max):
     db.collection('caixas').document(nome).set({
         "w": w, "h": h, "d": d, "peso_max": peso_max
     })
-
-st.divider()
-st.subheader("📁 Cadastro em Massa via Planilha")
-st.info("A planilha deve ter as colunas exatas: NOME, W, H, D, PESO_MAX")
-
-arquivo_excel = st.file_uploader("Arraste sua planilha (.xlsx) aqui", type=["xlsx"])
-
-if arquivo_excel is not None:
-    # O Pandas lê a planilha transformada em tabela
-    df = pd.read_excel(arquivo_excel)
-    st.dataframe(df) # Mostra uma prévia na tela
-    
-    if st.button("☁️ Salvar tudo no Firebase"):
-        with st.spinner("Salvando caixas no banco de dados..."):
-            for index, linha in df.iterrows():
-                # Envia cada linha direto para o Firebase, ignorando a IA
-                salvar_caixa(
-                    str(linha['NOME']), 
-                    float(linha['W']), 
-                    float(linha['H']), 
-                    float(linha['D']), 
-                    float(linha['PESO_MAX'])
-                )
-            st.success("✅ Todas as caixas foram cadastradas instantaneamente!")
-            st.rerun()
 
 # ==========================================
 # 2. FUNÇÃO DA INTELIGÊNCIA ARTIFICIAL
@@ -148,45 +122,23 @@ def calcular_melhor_caixa(itens_solicitados):
     return "Nenhuma das caixas cadastradas é grande o suficiente!", 0
 
 # ==========================================
-# 4. INTERFACE DO USUÁRIO
-# ==========================================
-# Carregamos os dados em tempo real da nuvem
-caixas_atuais = obter_caixas()
-produtos_atuais = obter_produtos()
-
-col1, col2 = st.columns(2)
-with col1:
-    st.write("📦 **Caixas (Nuvem):**")
-    if not caixas_atuais:
-        st.warning("Nenhuma caixa cadastrada ainda.")
-    else:
-        st.json(caixas_atuais)
-with col2:
-    st.write("🛒 **Produtos (Nuvem):**")
-    if not produtos_atuais:
-        st.warning("Nenhum produto cadastrado ainda.")
-    else:
-        st.json(produtos_atuais)
-
-st.divider()
-
-# ==========================================
-# ÁREA ADMINISTRATIVA (MENU LATERAL)
+# 4. ÁREA ADMINISTRATIVA (MENU LATERAL)
 # ==========================================
 with st.sidebar:
     st.header("⚙️ Administração")
     st.divider()
+    
+    # --- 1. UPLOAD DE CAIXAS ---
     st.subheader("📁 Cadastro em Massa (Caixas)")
-    st.info("Colunas obrigatórias na planilha: NOME, W, H, D, PESO_MAX")
+    st.info("Colunas na planilha: NOME, W, H, D, PESO_MAX")
 
-    arquivo_excel = st.file_uploader("Envie sua planilha (.xlsx)", type=["xlsx"])
+    arquivo_excel = st.file_uploader("Envie sua planilha de caixas (.xlsx)", type=["xlsx"])
 
     if arquivo_excel is not None:
-        # Lê a planilha
         df = pd.read_excel(arquivo_excel)
-        st.dataframe(df, use_container_width=True) # Mostra miniatura da tabela
+        st.dataframe(df, use_container_width=True) 
         
-        if st.button("☁️ Salvar no Firebase", use_container_width=True):
+        if st.button("☁️ Salvar Caixas", use_container_width=True):
             with st.spinner("Gravando no banco de dados..."):
                 for index, linha in df.iterrows():
                     salvar_caixa(
@@ -197,13 +149,61 @@ with st.sidebar:
                         float(linha['PESO_MAX'])
                     )
                 st.success("✅ Caixas cadastradas com sucesso!")
+                st.rerun()
 
-mensagem_usuario = st.chat_input("Fale com a IA (Ex: Cadastre uma caixa G de 50x40x50 pesando max 10000g)")
+    st.divider()
+    
+    # --- 2. UPLOAD DE PRODUTOS ---
+    st.subheader("🛒 Cadastro em Massa (Produtos)")
+    st.info("Colunas na planilha: NOME, W, H, D, PESO")
+
+    arquivo_excel_prod = st.file_uploader("Envie sua planilha de produtos (.xlsx)", type=["xlsx"], key="upload_prod")
+
+    if arquivo_excel_prod is not None:
+        df_prod = pd.read_excel(arquivo_excel_prod)
+        st.dataframe(df_prod, use_container_width=True) 
+        
+        if st.button("☁️ Salvar Produtos", use_container_width=True):
+            with st.spinner("Gravando no banco de dados..."):
+                for index, linha in df_prod.iterrows():
+                    salvar_produto(
+                        str(linha['NOME']), 
+                        float(linha['W']), 
+                        float(linha['H']), 
+                        float(linha['D']), 
+                        float(linha['PESO'])
+                    )
+                st.success("✅ Produtos cadastrados com sucesso!")
+                st.rerun()
+
+# ==========================================
+# 5. INTERFACE PRINCIPAL (CHAT E DADOS)
+# ==========================================
+caixas_atuais = obter_caixas()
+produtos_atuais = obter_produtos()
+
+col1, col2 = st.columns(2)
+with col1:
+    st.write("📦 **Caixas no Banco:**")
+    if not caixas_atuais:
+        st.warning("Nenhuma caixa cadastrada.")
+    else:
+        st.json(caixas_atuais)
+with col2:
+    st.write("🛒 **Produtos no Banco:**")
+    if not produtos_atuais:
+        st.warning("Nenhum produto cadastrado.")
+    else:
+        st.json(produtos_atuais)
+
+st.divider()
+
+mensagem_usuario = st.chat_input("Fale com a IA (Ex: Qual a melhor caixa para 2 teclados e 1 caneca?)")
 
 if mensagem_usuario:
     st.chat_message("user").write(mensagem_usuario)
     
-    with st.spinner("🤖 Sincronizando com a nuvem e processando..."):
+    with st.spinner("🤖 Consultando a IA e calculando o espaço 3D..."):
         nomes_produtos = list(produtos_atuais.keys())
         resposta_ia = processar_chat_ia(mensagem_usuario, nomes_produtos)
         
@@ -226,7 +226,7 @@ if mensagem_usuario:
             elif acao == "calcular":
                 caixa_ideal, peso_total = calcular_melhor_caixa(dados)
                 if peso_total > 0:
-                    st.chat_message("assistant").success(f"📦 **Use a {caixa_ideal}**")
-                    st.chat_message("assistant").info(f"⚖️ **Peso total estimado:** {peso_total/1000} kg")
+                    st.chat_message("assistant").success(f"📦 **Recomendação: Use a {caixa_ideal}**")
+                    st.chat_message("assistant").info(f"⚖️ **Peso total estimado:** {peso_total/1000:.2f} kg")
                 else:
                     st.chat_message("assistant").error(caixa_ideal)
